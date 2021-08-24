@@ -19,6 +19,7 @@ var (
 
 	localAddr   = flag.String("l", ":9999", "local address")
 	remoteAddr  = flag.String("r", "localhost:80", "remote address")
+	ipPrefix    = flag.String("ip", "", "Only this IP prefix can be accessed")
 	verbose     = flag.Bool("v", false, "display server actions")
 	veryverbose = flag.Bool("vv", false, "display server actions and all tcp data")
 	nagles      = flag.Bool("n", false, "disable nagles algorithm")
@@ -61,12 +62,33 @@ func main() {
 	if *veryverbose {
 		*verbose = true
 	}
-
+	var onylIps []string
+	for _, v := range strings.Split(*ipPrefix, ",") {
+		v = strings.TrimSpace(v)
+		if v == "" {
+			continue
+		}
+		onylIps = append(onylIps, v)
+	}
 	for {
 		conn, err := listener.AcceptTCP()
 		if err != nil {
 			logger.Warn("Failed to accept connection '%s'", err)
 			continue
+		}
+		if len(onylIps) != 0 {
+			var isOnylIp bool
+			for _, v := range onylIps {
+				if strings.HasPrefix(conn.RemoteAddr().String(), v) {
+					isOnylIp = true
+					continue
+				}
+			}
+			if !isOnylIp {
+				logger.Warn("%s not in onyl ip list [%s]. close conn", conn.RemoteAddr().String(), *ipPrefix)
+				conn.Close()
+				continue
+			}
 		}
 		connid++
 
